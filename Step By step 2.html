@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sender-Side Encapsulation — Ethernet / IPv4 / TCP-UDP</title>
+<style>
+  :root{
+    --bg:#060b18;
+    --line:#22304f;
+    --line2:#1a2742;
+    --panel:#0d1527;
+    --panel2:#0a1120;
+    --txt:#e9efff;
+    --muted:#8296c4;
+    --dim:#5b6d94;
+    --accent:#4f8cff;
+    --cyan:#22d3ee;
+    --pink:#f472b6;
+    --purple:#a78bfa;
+    --amber:#fbbf24;
+    --green:#34d399;
+    --slate:#94a3b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:
+      radial-gradient(1000px 560px at 8% -14%, #15224a 0%, transparent 60%),
+      radial-gradient(900px 520px at 96% -8%, #0d2c42 0%, transparent 58%),
+      var(--bg);
+    color:var(--txt);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+
+  /* ================= HERO ================= */
+  .hero{text-align:center;margin-bottom:26px}
+  .hero h1{
+    font-size:clamp(22px,3.9vw,36px);font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(100deg,#8ab4ff,#22d3ee 44%,#a78bfa);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p{color:var(--muted);margin-top:8px;font-size:14px}
+
+  /* ================= TOP BAR ================= */
+  .topbar{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    margin-bottom:18px;
+    background:linear-gradient(180deg,rgba(18,28,52,.85),rgba(10,17,32,.9));
+    border:1px solid var(--line);border-radius:14px;padding:12px 16px;
+  }
+  .seg{
+    display:inline-flex;background:#080e1c;border:1px solid var(--line);
+    border-radius:11px;padding:4px;gap:4px;
+  }
+  .seg button{
+    font-family:inherit;font-size:12.5px;font-weight:800;letter-spacing:.05em;
+    padding:7px 20px;border-radius:8px;border:none;cursor:pointer;
+    background:transparent;color:var(--muted);transition:.2s;
+  }
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:linear-gradient(180deg,#4f8cff,#3568d4);color:#fff;box-shadow:0 6px 18px -8px #4f8cff}
+  .topbar .note{font-size:12px;color:var(--dim)}
+  .topbar .note b{color:var(--cyan);font-weight:700}
+
+  /* ================= BOARD ================= */
+  .board{
+    display:grid;
+    grid-template-columns:288px 1fr;
+    gap:16px;
+    align-items:start;
+  }
+  @media(max-width:940px){ .board{grid-template-columns:1fr} }
+
+  .panel{
+    background:linear-gradient(180deg,rgba(18,27,50,.8),rgba(9,15,29,.92));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px;
+    box-shadow:0 20px 50px -30px rgba(0,0,0,.95);
+  }
+
+  /* ================= LAYER STACK ================= */
+  .stack-title{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dim);font-weight:800;margin-bottom:11px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .stack-title::after{content:"";flex:1;height:1px;background:var(--line2)}
+
+  .stack{display:flex;flex-direction:column;gap:7px}
+
+  .layer{
+    display:flex;align-items:center;gap:11px;
+    padding:10px 12px;border-radius:12px;
+    background:linear-gradient(180deg,#101a30,#0c1425);
+    border:1px solid var(--line2);
+    transition:.35s cubic-bezier(.4,0,.2,1);
+    position:relative;overflow:hidden;
+  }
+  .layer::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:var(--c);opacity:0;transition:.35s;
+  }
+  .layer .ic{
+    width:30px;height:30px;flex:0 0 30px;border-radius:9px;
+    display:grid;place-items:center;font-size:15px;
+    background:#080e1c;border:1px solid var(--line2);
+    transition:.35s;
+  }
+  .layer .txt{min-width:0;flex:1}
+  .layer .nm{font-size:12.5px;font-weight:800;letter-spacing:.01em}
+  .layer .sb{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .layer .tag{
+    font-size:9.5px;font-weight:800;letter-spacing:.04em;
+    padding:2px 7px;border-radius:999px;
+    background:#0a1224;border:1px solid var(--line2);color:var(--dim);
+    opacity:0;transform:translateX(8px);
+    transition:.35s;white-space:nowrap;
+  }
+  .layer.active{
+    border-color:var(--c);
+    background:linear-gradient(180deg,#16213c,#111a2f);
+    box-shadow:0 0 0 1px var(--c), 0 8px 26px -10px var(--c);
+    transform:translateX(3px);
+  }
+  .layer.active::before{opacity:1}
+  .layer.active .ic{
+    border-color:var(--c);
+    box-shadow:0 0 16px -3px var(--c);
+    transform:scale(1.07);
+  }
+  .layer.active .tag{opacity:1;transform:none;color:var(--c);border-color:var(--c)}
+
+  /* ================= PDU PREVIEW ================= */
+  .pdu-box{
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--line2);
+  }
+  .pdu{
+    display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;
+    min-height:44px;
+  }
+  .pdu .empty{
+    font-size:11.5px;color:var(--dim);font-style:italic;
+    display:flex;align-items:center;
+  }
+  .chip{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:6px 9px;border-radius:9px;min-width:52px;
+    font-size:10px;font-weight:800;line-height:1.25;
+    border:1px solid;
+    animation:chipIn .45s cubic-bezier(.2,1.3,.4,1) both;
+  }
+  .chip small{font-size:8.5px;font-weight:700;opacity:.85;margin-top:1px}
+  @keyframes chipIn{
+    from{opacity:0;transform:translateX(-20px) scale(.8)}
+    to{opacity:1;transform:none}
+  }
+  .chip.eth {background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.55);color:#ffd77a}
+  .chip.ip  {background:rgba(79,140,255,.15);border-color:rgba(79,140,255,.55);color:#a7c6ff}
+  .chip.tcp {background:rgba(244,114,182,.14);border-color:rgba(244,114,182,.55);color:#ffa8d4}
+  .chip.udp {background:rgba(167,139,250,.14);border-color:rgba(167,139,250,.55);color:#c9b8ff}
+  .chip.data{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.55);color:#7ff0c0}
+  .chip.fcs {background:rgba(148,163,184,.13);border-color:rgba(148,163,184,.5);color:#c3cee0}
+
+  /* ================= DIAGRAM ================= */
+  .diagram-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid var(--line2);
+  }
+  .diagram-head h2{
+    font-size:14px;font-weight:800;display:flex;align-items:center;gap:9px;
+  }
+  .diagram-head h2::before{
+    content:"";width:9px;height:9px;border-radius:3px;
+    background:var(--dc,#4f8cff);box-shadow:0 0 12px var(--dc,#4f8cff);
+    transition:.3s;
+  }
+  .diagram-head .order{
+    font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--dim);
+  }
+
+  .diagram{
+    display:flex;flex-direction:column;gap:12px;
+    max-height:520px;overflow-y:auto;padding-right:5px;
+  }
+  .diagram::-webkit-scrollbar{width:7px}
+  .diagram::-webkit-scrollbar-track{background:#080e1c;border-radius:4px}
+  .diagram::-webkit-scrollbar-thumb{background:#233257;border-radius:4px}
+  .diagram::-webkit-scrollbar-thumb:hover{background:#2f4270}
+
+  .seg-block{
+    border-radius:12px;overflow:hidden;
+    border:1px solid var(--line2);
+    background:#080e1c;
+    animation:blockIn .55s cubic-bezier(.2,.9,.3,1) both;
+  }
+  @keyframes blockIn{
+    from{opacity:0;transform:translateY(-18px) scale(.97)}
+    to{opacity:1;transform:none}
+  }
+  .seg-cap{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:7px 11px;
+    background:linear-gradient(90deg,var(--bgc),transparent 90%);
+    border-bottom:1px solid var(--line2);
+    font-size:11px;font-weight:800;letter-spacing:.02em;
+  }
+  .seg-cap .by{
+    font-family:ui-monospace,monospace;font-size:10px;
+    padding:2px 8px;border-radius:999px;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);
+    color:var(--muted);
+  }
+  .seg-rows{display:flex;flex-direction:column;gap:3px;padding:7px}
+
+  .bit-row{
+    display:grid;gap:3px;
+  }
+  .bit-field{
+    position:relative;
+    border-radius:7px;
+    padding:7px 6px 6px;
+    min-height:42px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;
+    border:1px solid var(--fc-border);
+    background:var(--fc-bg);
+    cursor:pointer;
+    overflow:hidden;
+    transition:.2s;
+    animation:fieldIn .45s cubic-bezier(.2,.9,.3,1) both;
+  }
+  @keyframes fieldIn{
+    from{opacity:0;transform:translateY(-8px) scale(.94)}
+    to{opacity:1;transform:none}
+  }
+  .bit-field:hover{
+    background:var(--fc-bg-h);
+    border-color:var(--fc);
+    transform:translateY(-2px);
+    box-shadow:0 0 0 1px var(--fc),0 8px 20px -8px var(--fc);
+    z-index:2;
+  }
+  .bit-field .fn{
+    font-size:10.5px;font-weight:800;letter-spacing:.01em;
+    color:var(--fc);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+  }
+  .bit-field .fv{
+    font-family:ui-monospace,monospace;font-size:10px;
+    color:#dbe6ff;margin-top:2px;opacity:.9;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+  }
+  .bit-field .fb{
+    position:absolute;top:3px;right:5px;
+    font-family:ui-monospace,monospace;font-size:8px;
+    color:var(--dim);opacity:.75;
+  }
+  .bit-field.spacer{
+    background:repeating-linear-gradient(45deg,#0a1120,#0a1120 5px,#0d1527 5px,#0d1527 10px);
+    border-style:dashed;border-color:#1a2742;
+    cursor:default;pointer-events:none;
+  }
+
+  .data-block{
+    border-radius:12px;border:1px dashed rgba(52,211,153,.45);
+    background:linear-gradient(180deg,rgba(52,211,153,.1),rgba(52,211,153,.03));
+    padding:16px 14px;text-align:center;
+    animation:blockIn .5s cubic-bezier(.2,.9,.3,1) both;
+  }
+  .data-block .dl{font-size:12px;font-weight:800;color:#7ff0c0;letter-spacing:.02em}
+  .data-block .dv{font-size:10.5px;color:var(--muted);margin-top:3px;font-family:ui-monospace,monospace}
+
+  /* ================= FIELD INFO ================= */
+  .field-info{
+    margin-top:13px;padding:11px 14px;
+    background:#080e1c;border:1px solid var(--line2);
+    border-left:3px solid var(--accent);
+    border-radius:10px;
+    font-size:12.5px;color:#c8d6f5;
+    min-height:58px;transition:border-color .25s;
+  }
+  .field-info .ph{color:var(--dim);font-style:italic}
+  .field-info b{color:var(--cyan)}
+  .field-info .val{font-family:ui-monospace,monospace;color:var(--amber);font-size:11.5px}
+
+  /* ================= FOOTER ================= */
+  .footer{margin-top:16px}
+
+  .byte-section{
+    background:linear-gradient(180deg,rgba(18,27,50,.8),rgba(9,15,29,.92));
+    border:1px solid var(--line);border-radius:16px;padding:16px;
+  }
+  .byte-title{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dim);font-weight:800;margin-bottom:11px;
+  }
+  .bytebar{
+    display:flex;gap:2px;height:34px;border-radius:9px;overflow:hidden;
+    background:#060b18;border:1px solid var(--line2);
+  }
+  .bytebar .empty{
+    flex:1;display:grid;place-items:center;
+    font-size:11.5px;color:var(--dim);font-style:italic;
+  }
+  .bb{
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:800;color:#06101f;
+    white-space:nowrap;overflow:hidden;
+    transition:flex .55s cubic-bezier(.4,0,.2,1);
+    animation:barIn .5s ease both;
+    position:relative;
+  }
+  .bb span{opacity:.95}
+  @keyframes barIn{from{opacity:0;transform:scaleX(.5)}to{opacity:1;transform:none}}
+  .byte-total{
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+    margin-top:10px;font-size:12px;color:var(--muted);
+  }
+  .byte-total b{color:var(--txt);font-family:ui-monospace,monospace;font-size:12.5px}
+
+  .narration{
+    margin-top:14px;
+    background:#080e1c;
+    border:1px solid var(--line2);
+    border-left:3px solid var(--cyan);
+    border-radius:12px;
+    padding:14px 16px;
+    font-size:13.5px;color:#cbd8f5;
+    min-height:80px;
+    transition:border-color .3s;
+  }
+  .narration b{color:var(--cyan)}
+  .narration .warn{color:var(--amber)}
+
+  .controls{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    margin-top:16px;
+  }
+  .ctl{
+    font-family:inherit;font-size:13.5px;font-weight:700;
+    padding:10px 20px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:#141d33;color:var(--txt);
+    transition:.18s;
+  }
+  .ctl:hover:not(:disabled){background:#1d2a4a;border-color:var(--accent);transform:translateY(-1px)}
+  .ctl:active:not(:disabled){transform:translateY(0)}
+  .ctl.primary{background:linear-gradient(180deg,#4f8cff,#3568d4);border-color:#5f97ff;color:#fff}
+  .ctl.primary:hover:not(:disabled){background:linear-gradient(180deg,#639aff,#4076e0)}
+  .ctl:disabled{opacity:.3;cursor:not-allowed;transform:none}
+
+  .dots{display:flex;gap:6px;margin-left:auto;align-items:center}
+  .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:#1a2742;transition:.3s;
+  }
+  .dot.on{background:var(--cyan);box-shadow:0 0 12px var(--cyan);transform:scale(1.3)}
+  .step-ind{
+    font-size:12px;color:var(--dim);font-family:ui-monospace,monospace;
+    margin-left:10px;white-space:nowrap;
+  }
+
+  /* ================= WIRE ================= */
+  .wire{
+    margin-top:14px;height:38px;border-radius:10px;
+    background:#04080f;border:1px solid var(--line2);
+    overflow:hidden;position:relative;
+    display:none;
+  }
+  .wire.on{display:block;animation:blockIn .5s ease both}
+  .wire::before,.wire::after{
+    content:"";position:absolute;top:0;bottom:0;width:60px;z-index:2;pointer-events:none;
+  }
+  .wire::before{left:0;background:linear-gradient(90deg,#04080f,transparent)}
+  .wire::after{right:0;background:linear-gradient(270deg,#04080f,transparent)}
+  .wire-inner{
+    font-family:ui-monospace,monospace;font-size:13px;letter-spacing:2.5px;
+    color:var(--cyan);white-space:nowrap;line-height:36px;padding-left:6px;
+    animation:bits 6s linear infinite;
+    text-shadow:0 0 12px rgba(34,211,238,.55);
+  }
+  @keyframes bits{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  @media(max-width:520px){
+    .board{gap:12px}
+    .panel{padding:13px}
+    .controls{gap:8px}
+    .ctl{padding:9px 15px;font-size:12.5px}
+    .step-ind{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Sender-Side Encapsulation</h1>
+    <p>Watch a message descend the stack — TCP/UDP header, IPv4 header, Ethernet frame — then leave as bits.</p>
+  </header>
+
+  <!-- ================= TOP BAR ================= -->
+  <div class="topbar">
+    <div class="seg">
+      <button data-proto="tcp" class="on">TCP</button>
+      <button data-proto="udp">UDP</button>
+    </div>
+    <span class="note">Transport protocol: <b id="protoName">TCP — Transmission Control Protocol</b></span>
+  </div>
+
+  <!-- ================= BOARD ================= -->
+  <div class="board">
+
+    <!-- LEFT -->
+    <div class="panel">
+      <div class="stack-title">Layer Stack</div>
+      <div class="stack" id="stack"></div>
+
+      <div class="pdu-box">
+        <div class="stack-title" style="margin-bottom:9px">Current PDU</div>
+        <div class="pdu" id="pdu">
+          <div class="empty">— nothing yet —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel">
+      <div class="diagram-head">
+        <h2 id="diagTitle">Frame Layout</h2>
+        <span class="order">wire order &nbsp;→</span>
+      </div>
+      <div class="diagram" id="diagram"></div>
+      <div class="field-info" id="fieldInfo">
+        <span class="ph">Hover any field in the diagram to see exactly what it does.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= FOOTER ================= -->
+  <div class="footer">
+    <div class="byte-section">
+      <div class="byte-title">Frame Composition</div>
+      <div class="bytebar" id="bytebar"><div class="empty">Waiting for encapsulation…</div></div>
+      <div class="byte-total">
+        <span id="byteLabel">—</span>
+        <span>Total on the wire: <b id="byteTotal">0 bytes</b></span>
+      </div>
+
+      <div class="narration" id="narration">
+        Press <b>Play</b> to watch the data descend through the layers.
+      </div>
+
+      <div class="wire" id="wire"><div class="wire-inner" id="wireInner"></div></div>
+
+      <div class="controls">
+        <button class="ctl primary" id="playBtn">▶ Play</button>
+        <button class="ctl" id="nextBtn">Next ▸</button>
+        <button class="ctl" id="resetBtn">↺ Reset</button>
+        <div class="dots" id="dots"></div>
+        <span class="step-ind" id="stepInd">step 0 / 4</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ==========================================================================
+   1. DATA — PROTOCOL HEADERS
+   ========================================================================== */
+
+const PAYLOAD_BYTES = 20;
+
+/* --- TCP header: 20 bytes = 5 rows of 32 bits --- */
+const TCP_ROWS = [
+  [
+    {n:'Source Port',      b:16, v:'49152',  d:'Ephemeral port chosen by the operating system for this connection. Identifies the sending application.'},
+    {n:'Destination Port', b:16, v:'443',    d:'Port 443 = HTTPS. Tells the receiving OS which application should get the data.'}
+  ],
+  [
+    {n:'Sequence Number',  b:32, v:'0x1A2B3C4D', d:'Byte offset of the first data byte in this segment. Lets the receiver reorder segments and detect loss.'}
+  ],
+  [
+    {n:'Acknowledgment Number', b:32, v:'0x00000000', d:'Next byte the sender expects to receive from the peer. Zero here because this is the opening SYN.'}
+  ],
+  [
+    {n:'Data Offset', b:4,  v:'5',     d:'Header length in 32-bit words. 5 × 4 = 20 bytes — no options present.'},
+    {n:'Reserved',    b:3,  v:'000',   d:'Reserved for future use. Must be zero.'},
+    {n:'Flags',       b:9,  v:'SYN',   d:'NS CWR ECE URG ACK PSH RST SYN FIN. SYN = synchronize, requests a new connection.'},
+    {n:'Window',      b:16, v:'64240', d:'How many more bytes the sender can accept — TCP flow control.'}
+  ],
+  [
+    {n:'Checksum',        b:16, v:'0x8F3C', d:'Error check over the TCP header, the payload, and a pseudo-header containing the IP addresses.'},
+    {n:'Urgent Pointer',  b:16, v:'0',      d:'Only meaningful when the URG flag is set. Points at urgent data.'}
+  ]
+];
+
+/* --- UDP header: 8 bytes = 2 rows of 32 bits --- */
+const UDP_ROWS = [
+  [
+    {n:'Source Port',      b:16, v:'5353', d:'Sender port. 5353 is used by mDNS.'},
+    {n:'Destination Port', b:16, v:'53',   d:'Port 53 = DNS. Identifies the receiving application.'}
+  ],
+  [
+    {n:'Length',   b:16, v:'28',     d:'UDP header (8 B) + payload (20 B) = 28 bytes. The only size information UDP provides.'},
+    {n:'Checksum', b:16, v:'0x4A21', d:'Optional in IPv4, mandatory in IPv6. Covers header + data + pseudo-header.'}
+  ]
+];
+
+/* --- IPv4 header: 20 bytes = 5 rows of 32 bits --- */
+function ipv4Rows(){
+  const transBytes = proto === 'tcp' ? 20 : 8;
+  const totalLen   = 20 + transBytes + PAYLOAD_BYTES;
+  return [
+    [
+      {n:'Version', b:4,  v:'4',   d:'IP version. 4 = IPv4.'},
+      {n:'IHL',     b:4,  v:'5',   d:'Internet Header Length in 32-bit words. 5 × 4 = 20 bytes — the minimum header, no options.'},
+      {n:'DSCP',    b:6,  v:'0',   d:'Differentiated Services Code Point — QoS priority marking. Voice traffic gets a higher value.'},
+      {n:'ECN',     b:2,  v:'00',  d:'Explicit Congestion Notification — lets routers signal congestion without dropping the packet.'},
+      {n:'Total Length', b:16, v:String(totalLen), d:`Entire packet: 20-byte IPv4 header + ${totalLen-20} bytes of payload = ${totalLen} bytes. 16 bits → max 65,535.`}
+    ],
+    [
+      {n:'Identification',  b:16, v:'0x1C46', d:'Unique ID for this datagram. All fragments of the same original packet share it.'},
+      {n:'Flags',           b:3,  v:'010',    d:'Bit 1 = Don\'t Fragment (DF). Bit 2 = More Fragments (MF). Bit 3 reserved.'},
+      {n:'Fragment Offset', b:13, v:'0',      d:'Where this fragment sits in the original datagram, measured in 8-byte units. 0 = first fragment.'}
+    ],
+    [
+      {n:'TTL',             b:8,  v:'64',     d:'Time To Live. Every router decrements it by 1. If it reaches 0, the packet is dropped and an ICMP "Time Exceeded" is sent back. Stops packets looping forever.'},
+      {n:'Protocol',        b:8,  v:proto==='tcp' ? '6 (TCP)' : '17 (UDP)', d:'Tells the receiver what is inside the payload. 1 = ICMP, 6 = TCP, 17 = UDP, 41 = IPv6.'},
+      {n:'Header Checksum', b:16, v:'0xB1E6', d:'Error check over the IPv4 header ONLY. Every router must recompute it because TTL changes at each hop.'}
+    ],
+    [
+      {n:'Source IP Address', b:32, v:'192.168.1.10', d:'Logical 32-bit address of the sender. Stays the same end-to-end (unless NAT rewrites it).'}
+    ],
+    [
+      {n:'Destination IP Address', b:32, v:'93.184.216.34', d:'Logical 32-bit address of the receiver. Every router forwards based on this field.'}
+    ]
+  ];
+}
+
+/* --- Ethernet frame --- */
+function ethRows(){
+  const ipTotal = 20 + (proto === 'tcp' ? 20 : 8) + PAYLOAD_BYTES;
+  return [
+    [
+      {n:'Destination MAC', b:48, v:'BB:BB:BB:BB:BB:BB', d:'MAC address of the next hop — the default gateway, NOT the final server. Rebuilt at every router.'},
+      {n:'Source MAC',      b:48, v:'AA:AA:AA:AA:AA:AA', d:'MAC address of this machine\'s network interface card.'},
+      {n:'EtherType',       b:16, v:'0x0800',            d:'Tells the receiver what is inside. 0x0800 = IPv4, 0x86DD = IPv6, 0x0806 = ARP.'}
+    ],
+    [
+      {n:'Payload — IPv4 packet', b:0, v:ipTotal + ' bytes', d:'The entire IPv4 packet (header + transport header + data) rides here. Minimum 46 bytes, maximum 1500 (standard MTU).'}
+    ],
+    [
+      {n:'spacer', b:80, spacer:true},
+      {n:'FCS',    b:32, v:'0x9E2C4B71', d:'Frame Check Sequence — a CRC-32 computed over the whole frame. If the FCS does not match, the frame is silently dropped.'}
+    ]
+  ];
+}
+
+/* --- Layer definitions --- */
+const LAYERS = [
+  {n:'Application', s:'HTTP · DNS · SSH · ...', icon:'📱', c:'#34d399'},
+  {n:'Transport',   s:'TCP / UDP',              icon:'🚚', c:'#f472b6'},
+  {n:'Network',     s:'IPv4',                   icon:'🌐', c:'#4f8cff'},
+  {n:'Data Link',   s:'Ethernet',               icon:'🔗', c:'#fbbf24'},
+  {n:'Physical',    s:'Bits on the wire',       icon:'⚡', c:'#22d3ee'}
+];
+
+const COLORS = {
+  eth : {c:'#fbbf24', bg:'rgba(251,191,36,.10)',  bgH:'rgba(251,191,36,.19)', border:'rgba(251,191,36,.42)'},
+  ip  : {c:'#4f8cff', bg:'rgba(79,140,255,.11)',  bgH:'rgba(79,140,255,.21)', border:'rgba(79,140,255,.42)'},
+  tcp : {c:'#f472b6', bg:'rgba(244,114,182,.10)', bgH:'rgba(244,114,182,.20)', border:'rgba(244,114,182,.42)'},
+  udp : {c:'#a78bfa', bg:'rgba(167,139,250,.10)', bgH:'rgba(167,139,250,.20)', border:'rgba(167,139,250,.42)'},
+  data: {c:'#34d399', bg:'rgba(52,211,153,.10)',  bgH:'rgba(52,211,153,.20)', border:'rgba(52,211,153,.42)'},
+  fcs : {c:'#94a3b8', bg:'rgba(148,163,184,.10)', bgH:'rgba(148,163,184,.20)', border:'rgba(148,163,184,.40)'}
+};
+
+/* ==========================================================================
+   2. STATE
+   ========================================================================== */
+
+let proto = 'tcp';
+let idx   = -1;
+let playing = false;
+let timer = null;
+
+/* ==========================================================================
+   3. DOM REFERENCES
+   ========================================================================== */
+
+const stackEl    = document.getElementById('stack');
+const pduEl      = document.getElementById('pdu');
+const diagramEl  = document.getElementById('diagram');
+const fieldInfo  = document.getElementById('fieldInfo');
+const diagTitle  = document.getElementById('diagTitle');
+const bytebarEl  = document.getElementById('bytebar');
+const byteTotal  = document.getElementById('byteTotal');
+const byteLabel  = document.getElementById('byteLabel');
+const narration  = document.getElementById('narration');
+const wireEl     = document.getElementById('wire');
+const wireInner  = document.getElementById('wireInner');
+const dotsEl     = document.getElementById('dots');
+const stepInd    = document.getElementById('stepInd');
+const nextBtn    = document.getElementById('nextBtn');
+const playBtn    = document.getElementById('playBtn');
+const protoName  = document.getElementById('protoName');
+
+/* ==========================================================================
+   4. BUILD LAYERS + DOTS
+   ========================================================================== */
+
+const layerEls = LAYERS.map(L => {
+  const d = document.createElement('div');
+  d.className = 'layer';
+  d.style.setProperty('--c', L.c);
+  d.innerHTML = `
+    <div class="ic">${L.icon}</div>
+    <div class="txt">
+      <div class="nm">${L.n}</div>
+      <div class="sb">${L.s}</div>
+    </div>
+    <span class="tag" data-tag></span>`;
+  stackEl.appendChild(d);
+  return d;
+});
+
+LAYERS.forEach(()=>{
+  const d = document.createElement('span');
+  d.className = 'dot';
+  dotsEl.appendChild(d);
+});
+
+/* wire bit stream */
+(function(){
+  let s = '';
+  for (let i = 0; i < 260; i++) s += Math.random() > .5 ? '1' : '0';
+  wireInner.textContent = s + s;
+})();
+
+/* ==========================================================================
+   5. BUILD STEPS
+   ========================================================================== */
+
+function buildSteps(){
+  const isTCP   = proto === 'tcp';
+  const T       = isTCP ? 20 : 8;
+  const Tname   = isTCP ? 'TCP' : 'UDP';
+  const Tfull   = isTCP ? 'TCP Header — 20 bytes' : 'UDP Header — 8 bytes';
+  const PDUname = isTCP ? 'TCP Segment' : 'UDP Datagram';
+  const ipTotal = 20 + T + PAYLOAD_BYTES;
+  const frameTotal = 14 + ipTotal + 4;
+
+  return [
+    /* -------- 0 · APPLICATION -------- */
+    {
+      layer: 0,
+      tag: 'Payload',
+      title: 'Application Data',
+      narration: `The <b>application layer</b> produces a payload — <b>${PAYLOAD_BYTES} bytes</b> of raw data. There are no headers yet. Everything below this line is the operating system's job.`,
+      blocks: ['data'],
+      pdu: [{k:'data', t:'Data', s:PAYLOAD_BYTES + ' B'}],
+      byteLabel: 'Application payload',
+      wire: false
+    },
+
+    /* -------- 1 · TRANSPORT -------- */
+    {
+      layer: 1,
+      tag: Tname,
+      title: Tfull,
+      narration: isTCP
+        ? `The <b>transport layer</b> prepends a <b>20-byte TCP header</b>. Ports identify the two applications; sequence numbers, flags and window size turn an unreliable network into an ordered, reliable byte stream. The unit is now a <b>TCP segment</b>.`
+        : `The <b>transport layer</b> prepends an <b>8-byte UDP header</b>. Ports identify the applications; a length field and a checksum are all UDP needs to stay fast and connectionless. The unit is now a <b>UDP datagram</b>.`,
+      blocks: [proto, 'data'],
+      pdu: [
+        {k:proto, t:Tname, s:T + ' B'},
+        {k:'data', t:'Data', s:PAYLOAD_BYTES + ' B'}
+      ],
+      byteLabel: PDUname,
+      wire: false
+    },
+
+    /* -------- 2 · NETWORK -------- */
+    {
+      layer: 2,
+      tag: 'IPv4',
+      title: 'IPv4 Header — 20 bytes',
+      narration: `The <b>network layer</b> prepends a <b>20-byte IPv4 header</b>. The payload now carries global logical addresses, so any router on the internet can forward it. The unit is now an <b>IP packet</b>.`,
+      blocks: ['ip', proto, 'data'],
+      pdu: [
+        {k:'ip',  t:'IPv4', s:'20 B'},
+        {k:proto, t:Tname,  s:T + ' B'},
+        {k:'data',t:'Data', s:PAYLOAD_BYTES + ' B'}
+      ],
+      byteLabel: 'IP Packet',
+      wire: false
+    },
+
+    /* -------- 3 · DATA LINK -------- */
+    {
+      layer: 3,
+      tag: 'Ethernet',
+      title: 'Ethernet Frame — 14 B header + 4 B trailer',
+      narration: `The <b>data link layer</b> wraps the packet in an <b>Ethernet frame</b> — a 14-byte header with MAC addresses and an EtherType, plus a 4-byte FCS trailer for error detection. This frame is valid for <i>one hop only</i>; it will be rebuilt at every router.`,
+      blocks: ['eth', 'ip', proto, 'data', 'fcs'],
+      pdu: [
+        {k:'eth', t:'Eth',  s:'14 B'},
+        {k:'ip',  t:'IPv4', s:'20 B'},
+        {k:proto, t:Tname,  s:T + ' B'},
+        {k:'data',t:'Data', s:PAYLOAD_BYTES + ' B'},
+        {k:'fcs', t:'FCS',  s:'4 B'}
+      ],
+      byteLabel: 'Ethernet Frame',
+      wire: false
+    },
+
+    /* -------- 4 · PHYSICAL -------- */
+    {
+      layer: 4,
+      tag: frameTotal + ' B',
+      title: 'Complete Frame — ' + frameTotal + ' bytes',
+      narration: `Done. The frame is <b>${frameTotal} bytes</b> total. The NIC serializes it into electrical signals (or light, or radio) and puts it on the wire, bound for the default gateway. Note: <span class="warn">the Ethernet header will be replaced at every hop, but the IP addresses inside never change.</span>`,
+      blocks: ['eth', 'ip', proto, 'data', 'fcs'],
+      pdu: [
+        {k:'eth', t:'Eth',  s:'14 B'},
+        {k:'ip',  t:'IPv4', s:'20 B'},
+        {k:proto, t:Tname,  s:T + ' B'},
+        {k:'data',t:'Data', s:PAYLOAD_BYTES + ' B'},
+        {k:'fcs', t:'FCS',  s:'4 B'}
+      ],
+      byteLabel: 'Complete Frame',
+      wire: true
+    }
+  ];
+}
+
+let STEPS = buildSteps();
+
+/* ==========================================================================
+   6. RENDER — DIAGRAM BLOCKS
+   ========================================================================== */
+
+function styleFor(key){
+  const K = COLORS[key] || COLORS.data;
+  return `--fc:${K.c};--fc-bg:${K.bg};--fc-bg-h:${K.bgH};--fc-border:${K.border};`;
+}
+
+/* --- generic row renderer (grid with proportional columns) --- */
+function renderRow(fields, colorKey){
+  const cols = fields.map(f => (f.b || 1) + 'fr').join(' ');
+  let html = `<div class="bit-row" style="grid-template-columns:${cols}">`;
+
+  fields.forEach((f, i) => {
+    const delay = (i * 55) + 'ms';
+    if (f.spacer){
+      html += `<div class="bit-field spacer" style="animation-delay:${delay}"></div>`;
+      return;
+    }
+    const K = COLORS[colorKey] || COLORS.ip;
+    html += `
+      <div class="bit-field"
+           style="${styleFor(colorKey)}animation-delay:${delay}"
+           data-name="${escapeAttr(f.n)}"
+           data-val="${escapeAttr(f.v || '')}"
+           data-desc="${escapeAttr(f.d || '')}">
+        <span class="fb">${f.b > 0 ? f.b + 'b' : ''}</span>
+        <div class="fn">${f.n}</div>
+        <div class="fv">${f.v || ''}</div>
+      </div>`;
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function escapeAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* --- block builders --- */
+function blockTCP(){
+  const K = COLORS.tcp;
+  let html = `<div class="seg-block" style="--bgc:${hexA(K.c,.14)};animation-delay:0ms">
+    <div class="seg-cap" style="color:${K.c}">
+      <span>TCP Header</span><span class="by">20 bytes · 160 bits</span>
+    </div>
+    <div class="seg-rows">`;
+  TCP_ROWS.forEach(row => { html += renderRow(row, 'tcp'); });
+  html += `</div></div>`;
+  return html;
+}
+
+function blockUDP(){
+  const K = COLORS.udp;
+  let html = `<div class="seg-block" style="--bgc:${hexA(K.c,.14)};animation-delay:0ms">
+    <div class="seg-cap" style="color:${K.c}">
+      <span>UDP Header</span><span class="by">8 bytes · 64 bits</span>
+    </div>
+    <div class="seg-rows">`;
+  UDP_ROWS.forEach(row => { html += renderRow(row, 'udp'); });
+  html += `</div></div>`;
+  return html;
+}
+
+function blockIPv4(){
+  const K = COLORS.ip;
+  let html = `<div class="seg-block" style="--bgc:${hexA(K.c,.14)};animation-delay:0ms">
+    <div class="seg-cap" style="color:${K.c}">
+      <span>IPv4 Header</span><span class="by">20 bytes · 160 bits</span>
+    </div>
+    <div class="seg-rows">`;
+  ipv4Rows().forEach(row => { html += renderRow(row, 'ip'); });
+  html += `</div></div>`;
+  return html;
+}
+
+function blockEthernet(){
+  const K = COLORS.eth;
+  const rows = ethRows();
+
+  let html = `<div class="seg-block" style="--bgc:${hexA(K.c,.14)};animation-delay:0ms">
+    <div class="seg-cap" style="color:${K.c}">
+      <span>Ethernet Frame</span><span class="by">header 14 B · trailer 4 B</span>
+    </div>
+    <div class="seg-rows">`;
+
+  /* row 1 — MACs + EtherType */
+  html += renderRow(rows[0], 'eth');
+
+  /* row 2 — payload (custom big block) */
+  html += `
+    <div class="bit-row" style="grid-template-columns:1fr">
+      <div class="bit-field"
+           style="${styleFor('ip')}min-height:52px;animation-delay:140ms"
+           data-name="Ethernet Payload"
+           data-val="${rows[1][0].v}"
+           data-desc="${escapeAttr(rows[1][0].d)}">
+        <span class="fb">46–1500 B</span>
+        <div class="fn">Payload — IPv4 Packet</div>
+        <div class="fv">${rows[1][0].v}</div>
+      </div>
+    </div>`;
+
+  /* row 3 — FCS right aligned */
+  html += renderRow(rows[2], 'fcs');
+
+  html += `</div></div>`;
+  return html;
+}
+
+function blockData(){
+  return `<div class="data-block" style="animation-delay:0ms">
+      <div class="dl">Application Payload</div>
+      <div class="dv">${PAYLOAD_BYTES} bytes of raw data — no headers yet</div>
+    </div>`;
+}
+
+function hexA(hex, a){
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ==========================================================================
+   7. RENDER — MAIN
+   ========================================================================== */
+
+function render(step){
+  const S = STEPS[step];
+
+  /* --- layer highlight --- */
+  layerEls.forEach((el, i) => {
+    el.classList.toggle('active', i === S.layer);
+    el.querySelector('[data-tag]').textContent = (i === S.layer) ? S.tag : '';
+  });
+
+  /* --- PDU preview --- */
+  if (S.pdu && S.pdu.length){
+    pduEl.innerHTML = S.pdu.map((p, i) =>
+      `<div class="chip ${p.k}" style="animation-delay:${i*70}ms">
+         <span>${p.t}</span><small>${p.s}</small>
+       </div>`).join('');
+  } else {
+    pduEl.innerHTML = '<div class="empty">— nothing yet —</div>';
+  }
+
+  /* --- diagram --- */
+  diagTitle.textContent = S.title;
+  let dHtml = '';
+  S.blocks.forEach(key => {
+    if (key === 'eth')  dHtml += blockEthernet();
+    if (key === 'ip')   dHtml += blockIPv4();
+    if (key === 'tcp')  dHtml += blockTCP();
+    if (key === 'udp')  dHtml += blockUDP();
+    if (key === 'data') dHtml += blockData();
+    if (key === 'fcs')  { /* FCS is part of the Ethernet block */ }
+  });
+  diagramEl.innerHTML = dHtml;
+
+  /* reset field info */
+  fieldInfo.innerHTML = '<span class="ph">Hover any field in the diagram to see exactly what it does.</span>';
+
+  /* --- byte bar --- */
+  renderByteBar(S);
+
+  /* --- narration --- */
+  narration.innerHTML = S.narration;
+
+  /* --- wire --- */
+  wireEl.classList.toggle('on', !!S.wire);
+
+  /* --- dots + indicator --- */
+  [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i <= S.layer));
+  stepInd.textContent = `step ${step} / ${STEPS.length - 1}`;
+  nextBtn.disabled = step >= STEPS.length - 1;
+}
+
+/* ==========================================================================
+   8. RENDER — BYTE BAR
+   ========================================================================== */
+
+const BAR_COLORS = {
+  eth : '#fbbf24',
+  ip  : '#4f8cff',
+  tcp : '#f472b6',
+  udp : '#a78bfa',
+  data: '#34d399',
+  fcs : '#94a3b8'
+};
+
+function renderByteBar(S){
+  if (!S.pdu || !S.pdu.length){
+    bytebarEl.innerHTML = '<div class="empty">Waiting for encapsulation…</div>';
+    byteTotal.textContent = '0 bytes';
+    byteLabel.textContent = '—';
+    return;
+  }
+
+  let total = 0;
+  let html = '';
+  S.pdu.forEach((p, i) => {
+    const b = parseFloat(p.s);
+    total += b;
+    html += `<div class="bb" style="flex:${b};background:${BAR_COLORS[p.k]};animation-delay:${i*80}ms"
+                  title="${p.t}: ${b} bytes">
+               <span>${b >= 10 ? p.t + ' ' + b : b}</span>
+             </div>`;
+  });
+  bytebarEl.innerHTML = html;
+  byteTotal.textContent = total + ' bytes';
+  byteLabel.textContent = S.byteLabel || '';
+}
+
+/* ==========================================================================
+   9. FIELD HOVER INFO
+   ========================================================================== */
+
+diagramEl.addEventListener('mouseover', e => {
+  const f = e.target.closest('.bit-field');
+  if (!f || f.classList.contains('spacer')) return;
+  const name = f.dataset.name;
+  const val  = f.dataset.val;
+  const desc = f.dataset.desc;
+  if (!name) return;
+
+  fieldInfo.innerHTML = `<b>${name}</b>` +
+    (val ? ` &nbsp;<span class="val">${val}</span>` : '') +
+    `<br>${desc || ''}`;
+});
+
+diagramEl.addEventListener('mouseleave', () => {
+  fieldInfo.innerHTML = '<span class="ph">Hover any field in the diagram to see exactly what it does.</span>';
+});
+
+/* ==========================================================================
+   10. NAVIGATION
+   ========================================================================== */
+
+function goTo(i){
+  idx = Math.max(0, Math.min(STEPS.length - 1, i));
+  render(idx);
+}
+
+function stop(){
+  playing = false;
+  clearTimeout(timer);
+  playBtn.textContent = '▶ Play';
+}
+
+function play(){
+  if (playing){ stop(); return; }
+  playing = true;
+  playBtn.textContent = '⏸ Pause';
+  if (idx >= STEPS.length - 1) idx = -1;
+
+  const tick = () => {
+    if (idx >= STEPS.length - 1){ stop(); return; }
+    goTo(idx + 1);
+    timer = setTimeout(tick, 2800);
+  };
+  tick();
+}
+
+function reset(){
+  stop();
+  idx = -1;
+  layerEls.forEach(el => {
+    el.classList.remove('active');
+    el.querySelector('[data-tag]').textContent = '';
+  });
+  pduEl.innerHTML = '<div class="empty">— nothing yet —</div>';
+  diagTitle.textContent = 'Frame Layout';
+  diagramEl.innerHTML = '';
+  fieldInfo.innerHTML = '<span class="ph">Hover any field in the diagram to see exactly what it does.</span>';
+  bytebarEl.innerHTML = '<div class="empty">Waiting for encapsulation…</div>';
+  byteTotal.textContent = '0 bytes';
+  byteLabel.textContent = '—';
+  narration.innerHTML = 'Press <b>Play</b> to watch the data descend through the layers.';
+  wireEl.classList.remove('on');
+  [...dotsEl.children].forEach(d => d.classList.remove('on'));
+  stepInd.textContent = `step 0 / ${STEPS.length - 1}`;
+  nextBtn.disabled = false;
+}
+
+/* ==========================================================================
+   11. EVENTS
+   ========================================================================== */
+
+playBtn.addEventListener('click', play);
+nextBtn.addEventListener('click', () => { stop(); goTo(idx + 1); });
+document.getElementById('resetBtn').addEventListener('click', reset);
+
+document.querySelectorAll('.seg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('on')) return;
+    document.querySelectorAll('.seg button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    proto = btn.dataset.proto;
+    protoName.textContent = proto === 'tcp'
+      ? 'TCP — Transmission Control Protocol'
+      : 'UDP — User Datagram Protocol';
+    STEPS = buildSteps();
+    stop();
+    if (idx >= 0) render(idx); else reset();
+  });
+});
+
+/* keyboard shortcuts */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space'){ e.preventDefault(); play(); }
+  if (e.code === 'ArrowRight'){ stop(); goTo(idx + 1); }
+  if (e.code === 'ArrowLeft'){ stop(); goTo(idx - 1); }
+  if (e.key === 'r' || e.key === 'R') reset();
+});
+
+/* ==========================================================================
+   12. INIT
+   ========================================================================== */
+
+protoName.textContent = 'TCP — Transmission Control Protocol';
+STEPS = buildSteps();
+reset();
+</script>
+</body>
+</html>
